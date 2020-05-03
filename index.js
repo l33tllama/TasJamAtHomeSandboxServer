@@ -106,10 +106,12 @@ r.connect({
     setInterval(function(){
       db_get_connected_clients(function(results){
         for(let i = 0; i < results.length; i++){
-          let connected = check_uuid_conn(results[i]["uuid"]);
+          var uuid = results[i]["uuid"];
+          var name  = results[i]["name"];
+          let connected = check_uuid_conn(uuid);
           if(!connected){
-            console.log("Player with UUID " + uuid + " has not reported in, lets boot them");
-            db_disconnect_player(results[i]["uuid"]);
+            console.log("Player with UUID " + uuid + " and name " + name + " has not reported in, lets boot them");
+            db_disconnect_player(uuid);
           }
         }
       });
