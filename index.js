@@ -18,6 +18,8 @@ const WORLD_CHUNK_HEIGHT = 4;
 const TILE_WIDTH = 64;
 const TiLE_HEIGHT = 64;
 
+let connected_uuids = [];
+
 let starting_position = { x: 5 * TILE_WIDTH, y: (16 + 4) * TiLE_HEIGHT };
 
 function zFill(integer){
@@ -26,14 +28,41 @@ function zFill(integer){
 
 // If we hear nothing from a client
 
-function timeout(){
+function timeout(uuid){
   connections = true;
   clearTimeout(timeout_id);
-  timeout_id = setTimeout(function(){
+  timeout_id = setTimeout(function(uuid){
     console.log("Connection timeout");
     connections = false;
   }, 10000);
 }
+
+function disconnect_player(uuid){
+
+}
+
+function check_uuid_conn(uuid){
+  let found_uuid = false;
+  for(let i = 0; i < connected_uuids.length; i++){
+    if(connected_uuids[i] == uuid){
+      found_uuid = true;
+    }
+  }
+  return found_uuid;
+}
+
+function ping_uuid(uuid){
+  let found_uuid = false
+  for(let i = 0; i < connected_uuids.length; i++){
+    if(connected_uuids[i] == uuid){
+      found_uuid = true;
+    }
+  }
+  if(!found_uuid){
+    connected_uuids.push(uuid);
+  }
+}
+
 
 
 r.connect({
@@ -72,6 +101,19 @@ r.connect({
         })
       } 
     }, 50);
+
+    // Check for disconnected players
+    setInterval(function(){
+      db_get_connected_clients(function(results){
+        for(let i = 0; i < results.length; i++){
+          let connected = check_uuid_conn(results[i]["uuid"]);
+          if(!connected){
+            console.log("Player with UUID " + uuid + " has not reported in, lets boot them");
+            db_disconnect_player(results[i]["uuid"]);
+          }
+        }
+      });
+    }, 15000);
     
     /*r.table("players").insert({
       name: "Spamalot",
@@ -373,6 +415,7 @@ function handle_command(cmd, data, uuid){
       break
     case "ping":
       timeout();
+      ping_uuid(uuid);
       break;
     default:
       console.log("Received some other command: " + cmd);
