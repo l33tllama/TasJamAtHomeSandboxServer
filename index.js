@@ -7,6 +7,9 @@ var players_db_conn;
 var chunks_db_con;
 let connection_id = 0;
 let ws_connections = [];
+var connected_count = 0;
+let connections = false;
+let timeout_id = 0;
 
 const CHUNK_DIM_WIDTH = 16;
 const CHUNK_DIM_HEIGHT = 16;
@@ -15,11 +18,23 @@ const WORLD_CHUNK_HEIGHT = 4;
 const TILE_WIDTH = 64;
 const TiLE_HEIGHT = 64;
 
-let starting_position = { x: 5 * TILE_WIDTH, y: (16 + 6) * TiLE_HEIGHT };
+let starting_position = { x: 5 * TILE_WIDTH, y: (16 + 4) * TiLE_HEIGHT };
 
 function zFill(integer){
   return ('00'+integer).slice(-2);
 }
+
+// If we hear nothing from a client
+
+function timeout(){
+  connections = true;
+  clearTimeout(timeout_id);
+  timeout_id = setTimeout(function(){
+    console.log("Connection timeout");
+    connections = false;
+  }, 10000);
+}
+
 
 r.connect({
   db: 'test'
@@ -32,28 +47,30 @@ r.connect({
 
         // Update connected clients with other connected clients positions
     setInterval(function(){
-      db_get_connected_clients(function(results){
-        let players_data = []
-        for(let i = 0; i < results.length; i++){
-          players_data.push({
-            "uuid" : results[i]["uuid"],
-            "position" : results[i]["position"]
-          });
-        }
-        if(players_data.length > 0){
-          let update_obj = {
-            "uuid" : "none",
-            "data" : {
-              "cmd" : "other_players_data",
-              "data" : {
-                "players" : players_data
-              }
-              
-            }
+      if(connections){
+        db_get_connected_clients(function(results){
+          let players_data = []
+          for(let i = 0; i < results.length; i++){
+            players_data.push({
+              "uuid" : results[i]["uuid"],
+              "position" : results[i]["position"]
+            });
           }
-          broadcast_message_obj(update_obj);
-        }
-      })
+          if(players_data.length > 0){
+            let update_obj = {
+              "uuid" : "none",
+              "data" : {
+                "cmd" : "other_players_data",
+                "data" : {
+                  "players" : players_data
+                }
+                
+              }
+            }
+            broadcast_message_obj(update_obj);
+          }
+        })
+      } 
     }, 50);
     
     /*r.table("players").insert({
@@ -354,6 +371,9 @@ function handle_command(cmd, data, uuid){
       db_disconnect_player(uuid);
       console.log("client quit")
       break
+    case "ping":
+      timeout();
+      break;
     default:
       console.log("Received some other command: " + cmd);
       console.log(data);
@@ -438,6 +458,8 @@ wss.on('connection', function connection(ws, request, client) {
   ws_connections[connection_id][0] = ws;
 
   let c_id = connection_id;
+
+  timeout();
   
   // Register message handler for this client
   ws.on('message', function incoming(message) {
@@ -457,6 +479,11 @@ wss.on('connection', function connection(ws, request, client) {
   ws.send(`Hello connection ID ${connection_id}`);
 
 });
+
+wss.on("close", function(){
+  console.log("A connection closed");
+  connected_count--;
+})
 
 
 function db_get_connected_clients(cb){
